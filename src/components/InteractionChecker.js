@@ -375,9 +375,7 @@ const InteractionChecker = () => {
       borderRadius: '20px',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center',
-      width: '50px',
-      height: '50px'
+      justifyContent: 'center'
     },
     mainMenu: {
       display: 'flex',
