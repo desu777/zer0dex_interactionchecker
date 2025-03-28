@@ -14,7 +14,7 @@ class ExplorerService {
     try {
       const normalizedAddress = walletAddress.toLowerCase();
       
-      const [swapResponse, poolResponse, approveResponse, allResponse] = await Promise.all([
+      const [swapResponse, poolResponse, approveResponse] = await Promise.all([
         axios.get(`${this.apiBaseUrl}/transaction`, {
           params: {
             accountAddress: normalizedAddress,
@@ -33,12 +33,6 @@ class ExplorerService {
           params: {
             accountAddress: normalizedAddress,
             to: this.contracts.approve,
-            limit: 1
-          }
-        }),
-        axios.get(`${this.apiBaseUrl}/transaction`, {
-          params: {
-            accountAddress: normalizedAddress,
             limit: 1
           }
         })
@@ -77,7 +71,9 @@ class ExplorerService {
       const swapCount = extractCount(swapResponse);
       const poolCount = extractCount(poolResponse);
       const approveCount = extractCount(approveResponse);
-      const totalCount = extractCount(allResponse);
+      
+      // Oblicz totalCount jako sumę trzech typów transakcji, a nie z osobnego zapytania
+      const totalCount = swapCount + poolCount + approveCount;
       
       console.log('Wyodrębnione liczby transakcji:', {
         swap: swapCount,
@@ -119,7 +115,13 @@ class ExplorerService {
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
         .slice(0, limit);
       
-      return allTransactions;
+      // Oblicz całkowite opłaty
+      const fees = this.calculateTotalFees(allTransactions);
+      
+      return {
+        transactions: allTransactions,
+        fees: fees
+      };
     } catch (error) {
       console.error("Error fetching wallet transactions:", error);
       throw error;
@@ -216,6 +218,8 @@ class ExplorerService {
             to: tx.to || tx.receiver || tx.toAddress || '',
             value: tx.value || tx.amount || '0',
             data: tx.method || tx.data || tx.input || tx.inputData || '',
+            gasFee: tx.gasFee || tx.gas || tx.gasUsed || '0',
+            gasPrice: tx.gasPrice || '0',
             type: txType,
             functionType: this.getFunctionType(tx.method || tx.data || tx.input || tx.inputData || '', txType)
           };
@@ -226,6 +230,7 @@ class ExplorerService {
             type: txType,
             functionType: txType,
             formattedDate: new Date().toLocaleDateString(),
+            gasFee: '0',
             error: true
           };
         }
@@ -256,6 +261,222 @@ class ExplorerService {
     };
     
     return functionSignatures[signature] || defaultType;
+  }
+
+  calculateTotalFees(transactions) {
+    const totalFeeWei = transactions.reduce((total, tx) => {
+      return total + (parseFloat(tx.gasFee) || 0);
+    }, 0);
+    
+    const totalFeeAogi = totalFeeWei / 1000000000000000000;
+    
+    return {
+      totalFeeWei,
+      totalFeeAogi: totalFeeAogi.toFixed(6)
+    };
+  }
+
+  /**
+   * Get historical fees for all interactions with zer0_dex contracts
+   * @param {string} walletAddress - Wallet address to check
+   * @returns {Promise<Object>} - Historical fees data
+   */
+  async getHistoricalFees(walletAddress) {
+    try {
+      const normalizedAddress = walletAddress.toLowerCase();
+      
+      console.log('Pobieranie wszystkich historycznych transakcji dla:', normalizedAddress);
+      
+      // Pobierz wszystkie transakcje dla wszystkich trzech kontraktów
+      const [swapTxs, poolTxs, approveTxs] = await Promise.all([
+        this.getAllTransactionsForContract(normalizedAddress, this.contracts.swap),
+        this.getAllTransactionsForContract(normalizedAddress, this.contracts.pool),
+        this.getAllTransactionsForContract(normalizedAddress, this.contracts.approve)
+      ]);
+      
+      console.log(`Pobrano historycznych transakcji: Swap: ${swapTxs.length}, Pool: ${poolTxs.length}, Approve: ${approveTxs.length}`);
+      
+      // Wszystkie transakcje łącznie
+      const allTransactions = [...swapTxs, ...poolTxs, ...approveTxs];
+      
+      // Oblicz całkowite opłaty
+      const fees = this.calculateTotalFees(allTransactions);
+      
+      return {
+        fees,
+        transactionCount: {
+          swap: swapTxs.length,
+          pool: poolTxs.length,
+          approve: approveTxs.length,
+          total: allTransactions.length
+        }
+      };
+    } catch (error) {
+      console.error("Error fetching historical fees:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all transactions for a specific contract
+   * @param {string} walletAddress - Wallet address
+   * @param {string} contractAddress - Contract address
+   * @returns {Promise<Array>} - List of transactions
+   */
+  async getAllTransactionsForContract(walletAddress, contractAddress) {
+    try {
+      // Najpierw pobierz pierwszą stronę, aby uzyskać całkowitą liczbę transakcji
+      const firstPageResponse = await axios.get(`${this.apiBaseUrl}/transaction`, {
+        params: {
+          accountAddress: walletAddress,
+          to: contractAddress,
+          limit: 100,
+          skip: 0
+        }
+      });
+      
+      // Sprawdź całkowitą liczbę transakcji
+      const totalTransactions = firstPageResponse.data.result?.total || 0;
+      
+      if (totalTransactions === 0) {
+        return [];
+      }
+      
+      // Zapisz pierwszą stronę wyników
+      let allTransactions = this.processTransactions(
+        firstPageResponse.data.result?.list || [], 
+        contractAddress
+      );
+      
+      // Jeśli mamy więcej transakcji niż jedna strona
+      if (totalTransactions > allTransactions.length) {
+        // Oblicz, ile stron musimy jeszcze pobrać
+        const pageSize = 100;
+        const totalPages = Math.ceil(totalTransactions / pageSize);
+        
+        // Pobieraj kolejne strony
+        for (let page = 1; page < totalPages; page++) {
+          const skip = page * pageSize;
+          
+          const response = await axios.get(`${this.apiBaseUrl}/transaction`, {
+            params: {
+              accountAddress: walletAddress,
+              to: contractAddress,
+              limit: pageSize,
+              skip: skip
+            }
+          });
+          
+          const pageTransactions = this.processTransactions(
+            response.data.result?.list || [], 
+            contractAddress
+          );
+          
+          allTransactions = [...allTransactions, ...pageTransactions];
+        }
+      }
+      
+      return allTransactions;
+    } catch (error) {
+      console.error(`Error fetching all transactions for contract ${contractAddress}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Process transactions from API response
+   * @param {Array} transactions - Raw transactions from API
+   * @param {string} contractAddress - Contract address
+   * @returns {Array} - Processed transactions
+   */
+  processTransactions(transactions, contractAddress) {
+    if (!transactions || !Array.isArray(transactions)) {
+      return [];
+    }
+
+    let txType;
+    switch (contractAddress.toLowerCase()) {
+      case this.contracts.swap: txType = 'swap'; break;
+      case this.contracts.pool: txType = 'pool'; break;
+      case this.contracts.approve: txType = 'approve'; break;
+      default: txType = 'unknown';
+    }
+    
+    return transactions.map(tx => {
+      try {
+        // Handle different timestamp formats
+        let timestamp;
+        let formattedDate;
+        
+        if (tx.timestamp) {
+          timestamp = typeof tx.timestamp === 'number' ? tx.timestamp * 1000 : new Date(tx.timestamp).getTime();
+        } else if (tx.timeStamp) {
+          timestamp = typeof tx.timeStamp === 'number' ? tx.timeStamp * 1000 : new Date(tx.timeStamp).getTime();
+        } else if (tx.time) {
+          timestamp = typeof tx.time === 'number' ? tx.time * 1000 : new Date(tx.time).getTime();
+        } else if (tx.date) {
+          timestamp = new Date(tx.date).getTime();
+        } else {
+          timestamp = Date.now();
+        }
+        
+        formattedDate = new Date(timestamp).toLocaleDateString();
+        
+        return {
+          hash: tx.hash || tx.txHash || tx.transactionHash || tx.id || '',
+          blockNumber: tx.epochNumber || tx.blockNumber || tx.block || 0,
+          timestamp: timestamp,
+          formattedDate: formattedDate,
+          from: tx.from || tx.sender || tx.fromAddress || '',
+          to: tx.to || tx.receiver || tx.toAddress || '',
+          value: tx.value || tx.amount || '0',
+          data: tx.method || tx.data || tx.input || tx.inputData || '',
+          gasFee: tx.gasFee || tx.gas || tx.gasUsed || '0',
+          gasPrice: tx.gasPrice || '0',
+          type: txType,
+          functionType: this.getFunctionType(tx.method || tx.data || tx.input || tx.inputData || '', txType)
+        };
+      } catch (error) {
+        console.error(`Error processing transaction:`, error);
+        return {
+          hash: tx.hash || 'unknown',
+          type: txType,
+          functionType: txType,
+          formattedDate: new Date().toLocaleDateString(),
+          gasFee: '0',
+          error: true
+        };
+      }
+    });
+  }
+
+  /**
+   * Calculate total fees for a list of transactions
+   * @param {Array} transactions - List of transactions
+   * @returns {Object} - Total fees in wei and AOGI
+   */
+  calculateTotalFees(transactions) {
+    // Suma wszystkich opłat w wei
+    const totalFeeWei = transactions.reduce((total, tx) => {
+      return total + (parseFloat(tx.gasFee) || 0);
+    }, 0);
+    
+    // Konwersja z wei na AOGI (1 AOGI = 10^18 wei)
+    const totalFeeAogi = totalFeeWei / 1000000000000000000;
+    
+    return {
+      totalFeeWei: this.formatWei(totalFeeWei),
+      totalFeeAogi: totalFeeAogi.toFixed(6) // Standardowe zaokrąglenie do 6 miejsc po przecinku
+    };
+  }
+
+  /**
+   * Format wei with thousands separators
+   * @param {number} wei - Wei amount
+   * @returns {string} - Formatted wei amount
+   */
+  formatWei(wei) {
+    return Number(wei).toLocaleString('fullwide', { useGrouping: true });
   }
 }
 

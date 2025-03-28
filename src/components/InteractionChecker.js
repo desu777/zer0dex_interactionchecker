@@ -24,6 +24,11 @@ const InteractionChecker = () => {
   const [selectedTransaction, setSelectedTransaction] = useState(null); // Selected transaction for detailed view
   const [showTestData, setShowTestData] = useState(false); // Flag to indicate if test data is being shown
   const [showAllTransactions, setShowAllTransactions] = useState(false); // Flag to control showing all transactions
+  const [historicalFees, setHistoricalFees] = useState(null); // Historical fees data
+  const [loadingHistoricalFees, setLoadingHistoricalFees] = useState(false); // Loading state for historical fees
+  // Add state for video animation
+  const [showVideo, setShowVideo] = useState(false);
+  const [videoSrc, setVideoSrc] = useState('');
 
   // Interval for checking progress
   const [progressInterval, setProgressInterval] = useState(null);
@@ -72,28 +77,69 @@ const InteractionChecker = () => {
     setShowTestData(false);
     
     try {
+      console.log('Rozpoczynam pobieranie danych dla portfela:', walletAddress);
+      
+      // Verify ExplorerService is properly defined
+      if (!ExplorerService) {
+        console.error('ExplorerService is not defined');
+        throw new Error('ExplorerService is not available');
+      }
+      
+      console.log('ExplorerService methods:', Object.keys(ExplorerService));
+      
+      if (typeof ExplorerService.getWalletInteractionCounts !== 'function') {
+        console.error('getWalletInteractionCounts is not a function');
+        throw new Error('ExplorerService.getWalletInteractionCounts is not a function');
+      }
+      
       // 1. Pobieramy liczby interakcji (statystyki)
       setSearchProgress(30);
       setSearchStatus('Getting interaction counts...');
+      console.log('Wywołuję getWalletInteractionCounts...');
       const stats = await ExplorerService.getWalletInteractionCounts(walletAddress);
+      console.log('Otrzymane statystyki:', stats);
       
       // 2. Pobieramy ostatnie 10 transakcji
       setSearchProgress(60);
       setSearchStatus('Retrieving transaction details...');
-      const transactions = await ExplorerService.getWalletTransactions(walletAddress, 10);
+      console.log('Wywołuję getWalletTransactions...');
+      const transactionData = await ExplorerService.getWalletTransactions(walletAddress, 10);
+      console.log('Otrzymane transakcje:', transactionData);
       
       // 3. Łączymy dane
       setSearchProgress(100);
       setSearchStatus(`Found ${stats.totalCount} interactions!`);
       
+      console.log('Ustawiam dane interakcji:', {
+        ...stats,
+        transactions: transactionData.transactions,
+        fees: transactionData.fees
+      });
+      
       setInteractions({
         ...stats,
-        transactions: transactions
+        transactions: transactionData.transactions,
+        fees: transactionData.fees
       });
     } catch (error) {
-      console.error("ERROR:", error);
+      console.error("ERROR w checkInteractionsReal:", error);
+      console.error("Stack trace:", error.stack);
       setSearchStatus('Error occurred!');
       setError(`Error occurred: ${error.message}`);
+      
+      // Dodatkowe informacje o błędzie
+      if (error.response) {
+        // Błąd odpowiedzi od serwera
+        console.error('Response error data:', error.response.data);
+        console.error('Response error status:', error.response.status);
+        console.error('Response error headers:', error.response.headers);
+      } else if (error.request) {
+        // Brak odpowiedzi
+        console.error('No response received. Request:', error.request);
+      } else {
+        // Inny błąd
+        console.error('Error setting up request:', error.message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -210,10 +256,52 @@ const InteractionChecker = () => {
 
   // Function checking interactions - chooses between mock and real service
   const checkInteractions = () => {
-    if (mockMode) {
-      checkInteractionsMock();
-    } else {
-      checkInteractionsReal();
+    // Show animation video before checking interactions
+    const videos = [
+      '/films/1.mp4',
+      '/films/2.mp4',
+      '/films/3.mp4',
+      '/films/4.mp4'
+    ];
+    
+    // Randomly select one of the videos
+    const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+    setVideoSrc(randomVideo);
+    setShowVideo(true);
+    
+    // Set a timeout to hide the video and continue with the interaction check
+    setTimeout(() => {
+      setShowVideo(false);
+      if (mockMode) {
+        checkInteractionsMock();
+      } else {
+        checkInteractionsReal();
+      }
+    }, 3000); // 3 seconds for the video to play
+  };
+
+  // Function to calculate historical fees for all transactions
+  const calculateHistoricalFees = async () => {
+    if (!walletAddress || walletAddress.trim() === '') {
+      setError('Please enter a wallet address');
+      return;
+    }
+
+    setLoadingHistoricalFees(true);
+    setError('');
+    
+    try {
+      setSearchStatus('Calculating all historical fees... This may take a moment.');
+      
+      const result = await ExplorerService.getHistoricalFees(walletAddress);
+      
+      setHistoricalFees(result);
+      setSearchStatus(`Calculated fees for all ${result.transactionCount.total} historical transactions!`);
+    } catch (error) {
+      console.error("Error calculating historical fees:", error);
+      setError(`Error calculating historical fees: ${error.message}`);
+    } finally {
+      setLoadingHistoricalFees(false);
     }
   };
 
@@ -359,7 +447,9 @@ const InteractionChecker = () => {
     },
     walletButton: {
       padding: '6px 12px',
-      background: `linear-gradient(to right, ${theme.system.error}, ${theme.system.purple})`,
+      background: darkMode ? 
+        theme.system.info : 
+        `linear-gradient(to right, ${theme.system.error}, ${theme.system.purple})`,
       borderRadius: '20px',
       color: 'white',
       fontSize: '14px',
@@ -422,7 +512,8 @@ const InteractionChecker = () => {
       fontSize: '20px',
       fontWeight: '600',
       marginBottom: '24px',
-      color: darkMode ? theme.system.main : theme.bg.text
+      color: darkMode ? theme.system.main : theme.bg.text,
+      textAlign: 'center'
     },
     label: {
       display: 'block',
@@ -487,11 +578,13 @@ const InteractionChecker = () => {
       alignItems: 'center',
       justifyContent: 'center',
       opacity: isLoading ? 0.7 : 1,
-      transition: 'background-color 0.3s'
+      transition: 'background-color 0.3s',
+      position: 'relative',
+      overflow: 'hidden'
     },
     statsGrid: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
+      gridTemplateColumns: '1fr 1fr 1fr',
       gap: '16px',
       marginBottom: '24px'
     },
@@ -509,6 +602,10 @@ const InteractionChecker = () => {
       borderColor: darkMode ? `rgba(254, 78, 82, 0.2)` : `rgba(254, 78, 82, 0.2)`,
       backgroundColor: darkMode ? 'rgba(28, 23, 28, 0.5)' : theme.bg.accent
     },
+    statCardTertiary: {
+      borderColor: darkMode ? `rgba(225, 133, 40, 0.2)` : `rgba(225, 133, 40, 0.2)`,
+      backgroundColor: darkMode ? 'rgba(28, 23, 28, 0.5)' : theme.bg.accent
+    },
     statValue: {
       fontSize: '28px',
       fontWeight: 'bold'
@@ -518,6 +615,9 @@ const InteractionChecker = () => {
     },
     statValueSecondary: {
       color: darkMode ? theme.system.error : theme.system.error
+    },
+    statValueTertiary: {
+      color: darkMode ? theme.system.warning : theme.system.warning
     },
     statLabel: {
       fontSize: '14px',
@@ -683,10 +783,58 @@ const InteractionChecker = () => {
 
   return (
     <div style={styles.appContainer}>
+      {/* CSS for laser animation */}
+      <style>
+        {`
+          @keyframes laserAnimation {
+            0% { background-position: 0% 0%; }
+            25% { background-position: 100% 0%; }
+            50% { background-position: 100% 100%; }
+            75% { background-position: 0% 100%; }
+            100% { background-position: 0% 0%; }
+          }
+          
+          .laser-button {
+            position: relative;
+            z-index: 1;
+          }
+          
+          .laser-button::before {
+            content: "";
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 22px;
+            background: linear-gradient(90deg, transparent, transparent, #ffffff, transparent, transparent);
+            background-size: 400% 400%;
+            z-index: -1;
+            animation: laserAnimation 3s ease-in-out infinite;
+            -webkit-mask: 
+              linear-gradient(#fff 0 0) content-box, 
+              linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            padding: 2px;
+          }
+        `}
+      </style>
+      
       {/* Header */}
-      <header style={styles.header}>
+      <header style={{
+        ...styles.header,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
         <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-          <span style={styles.logo}>Zer0 Interaction Checker</span>
+          {darkMode ? (
+            <img src="/photo/logo-dark.svg" alt="Zer0" style={{height: '36px'}} />
+          ) : (
+            <img src="/photo/logo-light.svg" alt="Zer0" style={{height: '36px'}} />
+          )}
+          <span style={styles.logo}>Interaction Checker</span>
           {showTestData && (
             <span style={styles.testDataBadge}>Sample Data</span>
           )}
@@ -708,11 +856,116 @@ const InteractionChecker = () => {
 
       {/* Menu */}
       <div style={styles.mainMenu}>
-        <button style={styles.menuItem}>Swap</button>
-        <button style={styles.menuItem}>Pools</button>
-        <button style={styles.menuItem}>Rewards</button>
-        <button style={styles.menuItemActive}>Interaction Checker</button>
+        <a 
+          href="https://0g-faucet.mictonode.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            ...styles.menuItemActive,
+            background: darkMode ? theme.system.info : `linear-gradient(to right, ${theme.system.error}, ${theme.system.purple})`,
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          Take MictoNode 0.2A0GI
+          <span style={{
+            marginLeft: '4px', 
+            fontSize: '16px',
+            filter: 'brightness(0) invert(1)'
+          }}>
+            {darkMode ? '🩸' : '💧'}
+          </span>
+        </a>
+        <a 
+          href="https://0g-faucet.zstake.xyz/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            ...styles.menuItemActive,
+            background: darkMode ? theme.system.info : `linear-gradient(to right, ${theme.system.error}, ${theme.system.purple})`,
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          Take Zstake 0.1A0GI
+          <span style={{
+            marginLeft: '4px', 
+            fontSize: '16px',
+            filter: 'brightness(0) invert(1)'
+          }}>
+            {darkMode ? '🩸' : '💧'}
+          </span>
+        </a>
+        <a 
+          href="https://0g-faucet.corenodehq.xyz/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            ...styles.menuItemActive,
+            background: darkMode ? theme.system.info : `linear-gradient(to right, ${theme.system.error}, ${theme.system.purple})`,
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          Take CoreNode 1A0GI
+          <span style={{
+            marginLeft: '4px', 
+            fontSize: '16px',
+            filter: 'brightness(0) invert(1)'
+          }}>
+            {darkMode ? '🩸' : '💧'}
+          </span>
+        </a>
+        <a 
+          href="https://test.zer0.exchange/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            ...styles.menuItemActive,
+            background: darkMode ? theme.system.info : `linear-gradient(to right, ${theme.system.error}, ${theme.system.purple})`,
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          Back to zer0
+          <span style={{marginLeft: '4px', fontSize: '16px'}}>🫧</span>
+        </a>
       </div>
+
+      {/* Video overlay - shown when the button is clicked */}
+      {showVideo && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 2000
+        }}>
+          <video 
+            src={videoSrc}
+            autoPlay
+            muted
+            style={{
+              maxWidth: '45%',
+              maxHeight: '45%',
+              borderRadius: '12px'
+            }}
+          />
+        </div>
+      )}
 
       {/* Main content */}
       <div style={styles.contentContainer}>
@@ -736,52 +989,43 @@ const InteractionChecker = () => {
 
           <div style={styles.card}>
             <h3 style={styles.cardTitle}>Tracked contracts:</h3>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
-              <div style={styles.contractRow}>
-                <span style={styles.contractLabel}>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px'}}>
+              <div style={{...styles.contractRow, padding: '4px 0'}}>
+                <span style={{...styles.contractLabel, fontWeight: '500'}}>
                   <ArrowRightLeft size={14} style={{marginRight: '4px'}} /> Swap Contract:
                 </span>
-                <code style={styles.contractAddress}>
-                  {CONTRACTS.swap.substring(0, 6)}...{CONTRACTS.swap.substring(38)}
+                <code style={{...styles.contractAddress, marginLeft: '20px'}}>
+                  0xe233...ef3b
                 </code>
               </div>
-              <div style={styles.contractRow}>
-                <span style={styles.contractLabel}>
+              <div style={{...styles.contractRow, padding: '4px 0'}}>
+                <span style={{...styles.contractLabel, fontWeight: '500'}}>
                   <Droplets size={14} style={{marginRight: '4px'}} /> Pool Contract:
                 </span>
-                <code style={styles.contractAddress}>
-                  {CONTRACTS.pool.substring(0, 6)}...{CONTRACTS.pool.substring(38)}
+                <code style={{...styles.contractAddress, marginLeft: '20px'}}>
+                  0x62DF...D69A
                 </code>
               </div>
-              <div style={styles.contractRow}>
-                <span style={styles.contractLabel}>
+              <div style={{...styles.contractRow, padding: '4px 0'}}>
+                <span style={{...styles.contractLabel, fontWeight: '500'}}>
                   <Key size={14} style={{marginRight: '4px'}} /> Approve Contract:
                 </span>
-                <code style={styles.contractAddress}>
-                  {CONTRACTS.approve.substring(0, 6)}...{CONTRACTS.approve.substring(38)}
+                <code style={{...styles.contractAddress, marginLeft: '20px'}}>
+                  0x1E00...BEfc
                 </code>
               </div>
             </div>
-          </div>
-
-          <div style={{marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px'}}>
-            <input
-              type="checkbox"
-              id="mockMode"
-              checked={mockMode}
-              onChange={() => setMockMode(!mockMode)}
-              style={{cursor: 'pointer'}}
-            />
-            <label htmlFor="mockMode" style={{fontSize: '14px', color: darkMode ? theme.system.text : theme.system.text, cursor: 'pointer'}}>
-              Demo mode (without blockchain connection)
-            </label>
           </div>
 
           <div style={{display: 'flex', gap: '10px', marginBottom: '24px'}}>
             <button 
               onClick={checkInteractions} 
               disabled={isLoading}
-              style={styles.button}
+              className="laser-button"
+              style={{
+                ...styles.button,
+                fontSize: '18px'
+              }}
             >
               {isLoading ? 'Searching interactions...' : 'Check interactions'}
             </button>
@@ -840,13 +1084,10 @@ const InteractionChecker = () => {
                 </div>
                 <div style={styles.progressText}>{interactions.poolPercentage}% of all interactions</div>
               </div>
-            </div>
-            
-            {/* Approve interactions */}
-            {interactions.approveCount !== undefined && (
-              <div style={styles.card}>
-                <h3 style={styles.cardTitle}>Approve Interactions</h3>
-                <div style={{...styles.statValue, color: theme.system.warning}}>{interactions.approveCount}</div>
+              
+              <div style={{...styles.statCard, ...styles.statCardTertiary}}>
+                <div style={styles.statLabel}>Approve Interactions</div>
+                <div style={{...styles.statValue, ...styles.statValueTertiary}}>{interactions.approveCount}</div>
                 <div style={styles.progressBar}>
                   <div style={{
                     height: '100%',
@@ -855,11 +1096,9 @@ const InteractionChecker = () => {
                     borderRadius: '4px'
                   }}></div>
                 </div>
-                <div style={styles.progressText}>
-                  {interactions.approvePercentage}% of all interactions
-                </div>
+                <div style={styles.progressText}>{interactions.approvePercentage}% of all interactions</div>
               </div>
-            )}
+            </div>
             
             <div style={styles.card}>
               <h3 style={styles.cardTitle}>Interaction details</h3>
@@ -897,6 +1136,69 @@ const InteractionChecker = () => {
                   </div>
                 )}
               </div>
+            </div>
+            
+            {/* Historical Gas Fees Analysis */}
+            <div style={styles.card}>
+              <h3 style={styles.cardTitle}>zer0_dex Gas Fees Analysis</h3>
+              
+              {!historicalFees && !loadingHistoricalFees && (
+                <button 
+                  onClick={calculateHistoricalFees} 
+                  disabled={loadingHistoricalFees}
+                  className="laser-button"
+                  style={{
+                    ...styles.button,
+                    background: darkMode ? theme.system.info : `linear-gradient(to right, ${theme.system.error}, ${theme.system.purple})`,
+                    fontSize: '18px'
+                  }}
+                >
+                  Uncover the burnt gas
+                </button>
+              )}
+              
+              {loadingHistoricalFees && (
+                <div style={{textAlign: 'center', padding: '20px'}}>
+                  <div style={{fontSize: '16px', fontWeight: '600', marginBottom: '10px'}}>
+                    Loading historical transaction data...
+                  </div>
+                  <div style={styles.progressBar}>
+                    <div 
+                      style={{
+                        height: '100%',
+                        backgroundColor: theme.system.warning,
+                        width: '100%',
+                        borderRadius: '4px',
+                        animation: 'pulse 1.5s infinite'
+                      }}
+                    ></div>
+                  </div>
+                  <div style={{fontSize: '14px', marginTop: '10px', color: theme.system.text}}>
+                    This may take a while for addresses with many transactions
+                  </div>
+                </div>
+              )}
+              
+              {historicalFees && (
+                <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                  <div style={{
+                    padding: '16px',
+                    backgroundColor: darkMode ? 'rgba(225, 133, 40, 0.1)' : 'rgba(225, 133, 40, 0.1)',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{fontSize: '14px', marginBottom: '8px', color: theme.system.text}}>
+                      Total Gas Fees(zer0_dex)
+                    </div>
+                    <div style={{fontSize: '24px', fontWeight: '700', color: theme.system.warning}}>
+                      {historicalFees.fees.totalFeeAogi} AOGI
+                    </div>
+                    <div style={{fontSize: '12px', marginTop: '4px', color: theme.system.text}}>
+                      {historicalFees.fees.totalFeeWei} wei
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Interaction history */}
@@ -951,20 +1253,6 @@ const InteractionChecker = () => {
                           >
                             {tx.hash.substring(0, 6)}...{tx.hash.substring(tx.hash.length - 4)}
                           </a>
-                          <button
-                            onClick={() => showTransactionDetails(tx.hash)}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: theme.system.success,
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              padding: '0',
-                              textDecoration: 'underline'
-                            }}
-                          >
-                            Show details
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -1111,9 +1399,64 @@ const InteractionChecker = () => {
         </div>
       )}
       
+      {/* Social Links */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '20px',
+        padding: '20px',
+        marginTop: '40px'
+      }}>
+        <a 
+          href="https://github.com/desu777" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{
+            color: darkMode ? theme.system.text : theme.system.text,
+            fontSize: '24px',
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 0C5.37 0 0 5.37 0 12C0 17.31 3.435 21.795 8.205 23.385C8.805 23.49 9.03 23.13 9.03 22.815C9.03 22.53 9.015 21.585 9.015 20.58C6 21.135 5.22 19.845 4.98 19.17C4.845 18.825 4.26 17.76 3.75 17.475C3.33 17.25 2.73 16.695 3.735 16.68C4.68 16.665 5.355 17.55 5.58 17.91C6.66 19.725 8.385 19.215 9.075 18.9C9.18 18.12 9.495 17.595 9.84 17.295C7.17 16.995 4.38 15.96 4.38 11.37C4.38 10.065 4.845 8.985 5.61 8.145C5.49 7.845 5.07 6.615 5.73 4.965C5.73 4.965 6.735 4.65 9.03 6.195C9.99 5.925 11.01 5.79 12.03 5.79C13.05 5.79 14.07 5.925 15.03 6.195C17.325 4.635 18.33 4.965 18.33 4.965C18.99 6.615 18.57 7.845 18.45 8.145C19.215 8.985 19.68 10.05 19.68 11.37C19.68 15.975 16.875 16.995 14.205 17.295C14.64 17.67 15.015 18.39 15.015 19.515C15.015 21.12 15 22.41 15 22.815C15 23.13 15.225 23.505 15.825 23.385C18.2072 22.5808 20.2772 21.0498 21.7437 19.0074C23.2101 16.9651 23.9994 14.5143 24 12C24 5.37 18.63 0 12 0Z" fill="currentColor"/>
+          </svg>
+          @desu777
+        </a>
+        <a 
+          href="https://x.com/nov3lolo" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{
+            color: darkMode ? theme.system.text : theme.system.text,
+            fontSize: '24px',
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z" fill="currentColor"/>
+          </svg>
+          @nov3lolo
+        </a>
+      </div>
+      
       {/* Footer */}
       <footer style={styles.footer}>
-        Zer0 Interaction Checker © 2025 | Powered by 0G
+        <div style={{display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '15px'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+            <span>Zer0 Interaction Checker © 2025 | Powered by desu</span>
+            <img src="/photo/nft.png" alt="NFT" style={{height: '40px', borderRadius: '50%'}} />
+          </div>
+          <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+            <span>Data provided by</span>
+            <img src="/photo/0g.png" alt="0G Logo" style={{height: '50px'}} />
+          </div>
+        </div>
       </footer>
     </div>
   );

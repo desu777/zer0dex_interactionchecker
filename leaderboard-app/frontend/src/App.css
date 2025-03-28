@@ -1,0 +1,17 @@
+.App {
+  font-family: 'Montserrat', sans-serif;
+  background-color: #f7f9fc;
+  min-height: 100vh;
+  padding: 2rem 0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+} 
