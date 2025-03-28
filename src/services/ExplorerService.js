@@ -472,11 +472,50 @@ class ExplorerService {
 
   /**
    * Format wei with thousands separators
-   * @param {number} wei - Wei amount
-   * @returns {string} - Formatted wei amount
+   * @param {number} wei - Amount in wei
+   * @returns {string} - Formatted wei with thousands separators
    */
   formatWei(wei) {
-    return Number(wei).toLocaleString('fullwide', { useGrouping: true });
+    return wei.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  }
+  
+  /**
+   * Calculate wallet ranking among all users
+   * This is a placeholder implementation - replace with actual data later
+   * @param {string} walletAddress - Wallet address to check
+   * @returns {Object} - Ranking data including percentile and position
+   */
+  async getWalletRanking(walletAddress) {
+    try {
+      // In a real implementation, this would query a database or API
+      // to get actual ranking data for the wallet
+      
+      // Placeholder values for demonstration - replace with actual implementation
+      const totalUsers = 1493139;
+      const walletPosition = 3624; // Lower number = higher rank
+      
+      // Calculate percentile (top X%)
+      const percentile = (walletPosition / totalUsers * 100).toFixed(2);
+      
+      // Better than X users
+      const betterThan = totalUsers - walletPosition;
+      
+      return {
+        percentile,
+        position: walletPosition,
+        totalUsers,
+        betterThan
+      };
+    } catch (error) {
+      console.error("Error calculating wallet ranking:", error);
+      // Return placeholder data if there's an error
+      return {
+        percentile: "0.24",
+        position: 3624,
+        totalUsers: 1493139,
+        betterThan: 1489515
+      };
+    }
   }
 }
 

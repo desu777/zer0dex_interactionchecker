@@ -26,6 +26,7 @@ const InteractionChecker = () => {
   const [showAllTransactions, setShowAllTransactions] = useState(false); // Flag to control showing all transactions
   const [historicalFees, setHistoricalFees] = useState(null); // Historical fees data
   const [loadingHistoricalFees, setLoadingHistoricalFees] = useState(false); // Loading state for historical fees
+  const [walletRanking, setWalletRanking] = useState(null); // Ranking data for the wallet
   // Add state for video animation
   const [showVideo, setShowVideo] = useState(false);
   const [videoSrc, setVideoSrc] = useState('');
@@ -106,20 +107,38 @@ const InteractionChecker = () => {
       const transactionData = await ExplorerService.getWalletTransactions(walletAddress, 10);
       console.log('Otrzymane transakcje:', transactionData);
       
-      // 3. Łączymy dane
+      // 3. Pobierz ranking portfela z API leaderboard
+      setSearchProgress(80);
+      setSearchStatus('Checking wallet ranking...');
+      console.log('Pobieranie danych rankingowych dla portfela...');
+      
+      let rankingData = null;
+      try {
+        // Użyj API leaderboard do pobrania rankingu
+        const rankingResponse = await axios.get(`${config.LEADERBOARD_API_URL}/api/wallet-ranking/${walletAddress}`);
+        rankingData = rankingResponse.data.ranking;  // Pobieramy właściwość ranking z obiektu odpowiedzi
+        console.log('Dane rankingowe otrzymane:', rankingData);
+      } catch (rankingError) {
+        console.warn('Nie udało się pobrać danych rankingowych:', rankingError);
+        // Nie przerywamy, kontynuujemy bez danych rankingowych
+      }
+      
+      // 4. Łączymy dane
       setSearchProgress(100);
       setSearchStatus(`Found ${stats.totalCount} interactions!`);
       
       console.log('Ustawiam dane interakcji:', {
         ...stats,
         transactions: transactionData.transactions,
-        fees: transactionData.fees
+        fees: transactionData.fees,
+        ranking: rankingData
       });
       
       setInteractions({
         ...stats,
         transactions: transactionData.transactions,
-        fees: transactionData.fees
+        fees: transactionData.fees,
+        ranking: rankingData
       });
     } catch (error) {
       console.error("ERROR w checkInteractionsReal:", error);
@@ -249,6 +268,16 @@ const InteractionChecker = () => {
         approvePercentage: Math.round((approveCount / totalCount) * 100),
         transactions
       });
+      
+      // Also set mock ranking data in mock mode
+      setTimeout(() => {
+        setWalletRanking({
+          percentile: "0.24",
+          position: 3624,
+          totalUsers: 1493139,
+          betterThan: 1489515
+        });
+      }, 2000);
       
       setIsLoading(false);
     }, 1500);
@@ -840,11 +869,17 @@ const InteractionChecker = () => {
           )}
         </div>
         <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-          {walletAddress && (
-            <div style={styles.walletButton}>
-              <span>{formatWalletAddress(walletAddress)}</span>
-            </div>
-          )}
+          <a 
+            href={`${config.LEADERBOARD_API_URL}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              ...styles.walletButton,
+              textDecoration: 'none'
+            }}
+          >
+            <span>Leaderboard</span>
+          </a>
           <button 
             onClick={() => setDarkMode(!darkMode)} 
             style={styles.themeToggle}
@@ -961,7 +996,8 @@ const InteractionChecker = () => {
             style={{
               maxWidth: '45%',
               maxHeight: '45%',
-              borderRadius: '12px'
+              borderRadius: '24px',
+              boxShadow: '0 4px 30px rgba(0, 0, 0, 0.3)'
             }}
           />
         </div>
@@ -1107,6 +1143,33 @@ const InteractionChecker = () => {
                   <span style={styles.detailLabel}>Total interactions:</span>
                   <span style={styles.detailValue}>{interactions.totalCount}</span>
                 </div>
+                
+                {/* Wallet Ranking Card - display only if ranking data is available */}
+                {interactions.ranking && (
+                  <div style={{
+                    background: darkMode ? 
+                      theme.system.info : 
+                      `linear-gradient(to right, ${theme.system.error}, ${theme.system.purple})`,
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginTop: '20px',
+                    textAlign: 'center',
+                    color: 'white'
+                  }}>
+                    <div style={{ fontSize: '16px', marginBottom: '10px' }}>
+                      Your wallet is in TOP
+                    </div>
+                    <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '10px' }}>
+                      {interactions.ranking.percentile}%
+                    </div>
+                    <div style={{ fontSize: '14px' }}>
+                      and better than {interactions.ranking.betterThan} of {interactions.ranking.totalWallets} participants
+                    </div>
+                    <div style={{ fontSize: '16px', marginTop: '15px', fontWeight: 'bold' }}>
+                      Ranking: #{interactions.ranking.position}
+                    </div>
+                  </div>
+                )}
                 
                 {interactions.totalVolume && (
                   <div style={styles.detailsRow}>
@@ -1449,7 +1512,7 @@ const InteractionChecker = () => {
       <footer style={styles.footer}>
         <div style={{display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '15px'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-            <span>Zer0 Interaction Checker © 2025 | Powered by desu</span>
+            <span>Zer0 Interaction Checker © 2025 | Builded for zer0_dex | Powered by desu </span>
             <img src="/photo/nft.png" alt="NFT" style={{height: '40px', borderRadius: '50%'}} />
           </div>
           <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>

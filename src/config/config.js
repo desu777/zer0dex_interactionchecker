@@ -8,9 +8,17 @@ const config = {
   
   // RPC endpoints
   RPC: {
-    PRIMARY: 'https://rpc.0g.ai',
-    SECONDARY: 'https://newton-rpc.serv.run'
-  }
+    PRIMARY: 'https://evmrpc-testnet.0g.ai',
+    SECONDARY: 'https://og-testnet-evm.itrocket.net'
+  },
+
+  LEADERBOARD_API_URL: '/leaderboard',
+
+  // Blok startowy dla skanowania
+  START_BLOCK: 3630076,
+  
+  // Wersja aplikacji
+  VERSION: "1.2.0"
 };
 
 export default config; 
