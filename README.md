@@ -1,4 +1,5 @@
 # Zero Interaction Checker
+![image](https://github.com/user-attachments/assets/ab8ec4c2-2cd9-4d38-be91-dc348283e84b)
 
 Aplikacja do śledzenia interakcji użytkowników z kontraktami Zero w sieci Newton. Zawiera zarówno narzędzie do analizy interakcji portfeli, jak i tabelę liderów (leaderboard) wyświetlającą rankingi najaktywniejszych portfeli.
 
