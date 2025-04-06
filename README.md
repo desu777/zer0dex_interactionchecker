@@ -1,7 +1,5 @@
-# Zero Interaction Checker
+# Zero Interaction Checker -  https://zer0checker.xyz/
 ![image](https://github.com/user-attachments/assets/ab8ec4c2-2cd9-4d38-be91-dc348283e84b)
-https://zer0checker.xyz/
-
 
 Application for tracking user interactions with Zero contracts on the Newton network. Includes both a wallet interaction analysis tool and a leaderboard displaying rankings of the most active wallets.
 Project Structure
