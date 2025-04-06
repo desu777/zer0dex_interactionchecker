@@ -1,85 +1,63 @@
 # Zero Interaction Checker
 ![image](https://github.com/user-attachments/assets/ab8ec4c2-2cd9-4d38-be91-dc348283e84b)
+https://zer0checker.xyz/
+Application for tracking user interactions with Zero contracts on the Newton network. Includes both a wallet interaction analysis tool and a leaderboard displaying rankings of the most active wallets.
+Project Structure
+The project consists of two main parts:
+1. Zero Interaction Checker
+Basic application checking wallet interactions with Zero contracts:
 
-Aplikacja do śledzenia interakcji użytkowników z kontraktami Zero w sieci Newton. Zawiera zarówno narzędzie do analizy interakcji portfeli, jak i tabelę liderów (leaderboard) wyświetlającą rankingi najaktywniejszych portfeli.
+Wallet verification: Checks the number and types of interactions for given addresses
+Statistics: Displays the time of first and last interaction and gas used
+User Interface: Simple web interface for checking addresses
 
-## Struktura projektu
+2. Zero Interaction Leaderboard
+Application collecting and displaying rankings of wallets with the highest number of interactions:
 
-Projekt składa się z dwóch głównych części:
+Data collection: Automatic retrieval of transaction history from the Newton blockchain
+Interaction analysis: Identification and counting of interactions with contracts (swap, pool, approve)
+Database: Storage of wallet statistics in SQLite database
+API: Endpoints for retrieving leaderboard data
+Frontend: Responsive interface for displaying rankings
 
-### 1. Zero Interaction Checker
+Features
 
-Podstawowa aplikacja sprawdzająca interakcje portfeli z kontraktami Zero:
+Turbo data retrieval with parallel queries
+Checkpoint mechanism for resuming after interruption
+Tracking statistics for each type of interaction (swap, pool, approve)
+Storing data on first and last interaction
+Counting total gas used
 
-- **Sprawdzanie portfeli**: Weryfikacja liczby i typów interakcji dla podanych adresów
-- **Statystyki**: Wyświetlanie czasu pierwszej i ostatniej interakcji oraz zużytego gazu
-- **Interface użytkownika**: Prosty interface webowy do sprawdzania adresów
+Tracked Contracts
 
-### 2. Zero Interaction Leaderboard
+SWAP: 0xe.........790bef3b
+POOL: 0x6.........D19D69A
+APPROVE: 0x1........8CBEfc
 
-Aplikacja zbierająca i wyświetlająca ranking portfeli z największą liczbą interakcji:
-
-- **Pobieranie danych**: Automatyczne pobieranie historii transakcji z blockchainu Newton
-- **Analiza interakcji**: Identyfikacja i zliczanie interakcji z kontraktami (swap, pool, approve)
-- **Baza danych**: Przechowywanie statystyk portfeli w bazie SQLite
-- **API**: Endpointy do pobierania danych leaderboardu
-- **Frontend**: Responsywny interface do wyświetlania rankingu
-
-## Funkcje
-
-- Turbo pobieranie danych z równoległymi zapytaniami
-- Mechanizm checkpointów do wznawiania po przerwaniu
-- Śledzenie statystyk dla każdego typu interakcji (swap, pool, approve)
-- Zapisywanie danych o pierwszej i ostatniej interakcji
-- Liczenie całkowitego zużytego gazu
-
-## Śledzone kontrakty
-
-- **SWAP**: `0xe233d75ce6f04c04610947188dec7c55790bef3b`
-- **POOL**: `0x62DF0E43e599a279015fFCFf70c2cF82bD19D69A`
-- **APPROVE**: `0x1E0D871472973c562650E991ED8006549F8CBEfc`
-
-## Uruchamianie
-
-### Zero Interaction Checker
-
-Podstawowa aplikacja w głównym katalogu:
-
-```bash
-# Instalacja zależności
+Running the Application
+Zero Interaction Checker
+Basic application in the main directory:
+bashCopy# Install dependencies
 npm install
-
-# Uruchomienie serwera deweloperskiego
+# Run development server
 npm start
-```
-
-### Zero Interaction Leaderboard
-
-Aplikacja leaderboardu w katalogu `/leaderboard-app`:
-
-```bash
-# Przejście do katalogu leaderboardu
+Zero Interaction Leaderboard
+Leaderboard application in the /leaderboard-app directory:
+bashCopy# Navigate to leaderboard directory
 cd leaderboard-app
-
-# Instalacja zależności (backend i frontend)
+# Install dependencies (backend and frontend)
 npm run install-all
-
-# Uruchomienie aplikacji produkcyjnej (budowanie frontendu + uruchomienie API)
+# Run production application (build frontend + run API)
 npm start
-
-# Uruchomienie w trybie deweloperskim (backend + frontend z hot-reload)
+# Run in development mode (backend + frontend with hot-reload)
 npm run dev
-
-# Turbo pobieranie danych
+# Turbo data retrieval
 npm run fetch-all-data
-```
+Helper Scripts
+For Windows systems, .bat scripts are available:
 
-### Skrypty pomocnicze
+start-app.bat - runs the production application
+dev-mode.bat - runs the application in development mode
 
-Dla systemów Windows dostępne są skrypty `.bat`:
-- `start-app.bat` - uruchamia aplikację produkcyjną
-- `dev-mode.bat` - uruchamia aplikację w trybie deweloperskim
-
-## Licencja
-
-Ten projekt jest udostępniany na licencji MIT. 
+License
+This project is licensed under the MIT License.
